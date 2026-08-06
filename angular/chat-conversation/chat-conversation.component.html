@@ -1,0 +1,48 @@
+<div
+  class="chat-log"
+  #log
+  role="log"
+  aria-live="polite"
+  aria-label="Conversation with the assistant"
+>
+  @for (m of messages(); track m.id) {
+    <div
+      class="chat-msg"
+      [class.is-user]="m.role === 'user'"
+      [class.is-assistant]="m.role === 'assistant'"
+    >
+      <p class="chat-bubble">{{ m.text }}</p>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="chat-msg is-assistant" aria-hidden="true">
+      <p class="chat-bubble chat-typing">
+        <span class="dot"></span><span class="dot"></span
+        ><span class="dot"></span>
+      </p>
+    </div>
+  }
+</div>
+
+<!-- (ngSubmit) needs FormsModule imported in the component (see the .ts note). -->
+<form class="chat-composer" (ngSubmit)="onSubmit()">
+  <input
+    #input
+    type="text"
+    class="chat-input"
+    [formControl]="draft"
+    [attr.maxlength]="maxLength"
+    [placeholder]="placeholder()"
+    autocomplete="off"
+    aria-label="Type your message"
+  />
+  <button
+    type="submit"
+    class="chat-send"
+    [disabled]="loading() || draft.value.trim() === ''"
+    aria-label="Send message"
+  >
+    Send
+  </button>
+</form>

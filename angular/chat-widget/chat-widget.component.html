@@ -1,0 +1,36 @@
+@if (open()) {
+  <section class="cw-panel" role="dialog" [attr.aria-label]="title()">
+    <header class="cw-head">
+      <span class="cw-title">{{ title() }}</span>
+      <button
+        type="button"
+        class="cw-close"
+        (click)="toggle()"
+        aria-label="Close chat"
+      >
+        ✕
+      </button>
+    </header>
+    <app-chat-conversation
+      class="cw-body"
+      [messages]="messages()"
+      [loading]="loading()"
+      [placeholder]="placeholder()"
+      (send)="onSend($event)"
+    />
+  </section>
+}
+
+<button
+  type="button"
+  class="cw-launcher"
+  (click)="toggle()"
+  [attr.aria-expanded]="open()"
+  [attr.aria-label]="open() ? 'Close chat' : 'Open chat'"
+>
+  @if (open()) {
+    <span aria-hidden="true">✕</span>
+  } @else {
+    <span aria-hidden="true">💬</span>
+  }
+</button>

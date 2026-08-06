@@ -1,0 +1,77 @@
+:host {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.cw-launcher {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid #4338ca;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cw-launcher:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.cw-panel {
+  width: min(92vw, 360px);
+  /* dvh (NOT vh) so the panel shrinks to the *visible* viewport when a mobile
+     keyboard opens. With plain vh the composer input ends up hidden BEHIND the
+     keyboard instead of resizing above it — a bug we shipped twice before
+     switching to dvh. The plain-vh line is a fallback for old browsers without
+     dvh support; the dvh line below wins where supported. */
+  height: min(70vh, 520px);
+  height: min(70dvh, 520px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e6e6ef;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(31, 36, 48, 0.22);
+}
+
+.cw-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem;
+  background: #4f46e5;
+  color: #fff;
+}
+.cw-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.cw-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.2rem;
+}
+
+.cw-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: block;
+}
