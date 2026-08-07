@@ -1,6 +1,6 @@
 {
   "name": "chatarmor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Production-ready AI chat endpoint for NestJS over Gemini/OpenAI, with the protections indie devs forget: API key never on the frontend, timeout + total fallback (never crashes), anti-prompt-injection, and a hard spend cap via llm-budget-cap.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

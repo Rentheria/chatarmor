@@ -4,6 +4,16 @@ All notable changes to `chatarmor` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/). Being pre-1.0, a **minor** bump may
 carry breaking changes — those are called out explicitly below.
 
+## [0.2.1] — 2026-08-06
+
+Docs-only patch. No code, `dist/`, or behavior changes from 0.2.0.
+
+### Changed
+
+- **README no longer names real client projects.** The credibility line
+  ("shipped three times in production") now describes the track record
+  without naming the specific products it shipped in.
+
 ## [0.2.0] — 2026-07-27
 
 Security release. Two independent audits found that the package's
