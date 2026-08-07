@@ -4,6 +4,66 @@ All notable changes to `chatarmor` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/). Being pre-1.0, a **minor** bump may
 carry breaking changes — those are called out explicitly below.
 
+## [0.2.2] — 2026-08-07
+
+Dependency-security patch. ChatArmor shipped against `llm-budget-cap@^0.1.0`,
+and npm's caret range never crosses a `0.x` minor — so every install since 0.1.0
+resolved to `llm-budget-cap@0.1.x` and none of the hardening in its 0.2.0
+security release ever reached ChatArmor users. The range is now `^0.2.0`.
+
+**No API changes.** `reply()`, `budgetSubKey`, `ChatArmorResult` and the module
+options are identical; `npm install chatarmor@0.2.2` requires no code changes.
+That is why this is a patch and not a minor.
+
+### Fixed
+
+- **A hung Redis no longer hangs the chat request.** `llm-budget-cap@0.1.0`
+  had no timeout around its Redis call. With the client config the README used to
+  show (plain `new Redis(url)`, i.e. ioredis' `enableOfflineQueue: true`), a dead
+  Redis queues the command **offline and never rejects** — so the spend-cap check
+  never settled, `failOpen` never fired, and `reply()` hung indefinitely instead
+  of honouring its "always resolves, never throws" contract. `llm-budget-cap@0.2.0`
+  applies a hard per-call `timeoutMs` (default 5000 ms), so the call is now decided
+  by `failOpen` within a bounded time. The README quickstart also now sets
+  `enableOfflineQueue: false` and `maxRetriesPerRequest: 2`, so failures are fast
+  and clean rather than merely bounded.
+- **`ChatArmorResult.degraded` is now actually reachable.** It was documented as
+  "true when the spend cap ran in degraded (Redis-down, fail-open) mode", but was
+  only ever set on the `budget-exceeded` branch — a branch a degraded decision can
+  never reach, since degrading implies `allowed: true`. The flag was therefore
+  dead: an operator running the default `failOpen: true` had **no way to learn
+  their spend cap had stopped counting**. `degraded: true` is now carried on every
+  result produced after an unmetered check (including `ok: true` replies), and the
+  service logs a warning when it happens.
+- **A malformed `budgetSubKey` can no longer leak into a Redis key.**
+  `llm-budget-cap@0.2.0` validates `subKey` (`[A-Za-z0-9_.-]`, 1–128 chars, no
+  `:`) instead of concatenating whatever it is given, and rejects the empty string
+  rather than letting it fall through to the global counter. ChatArmor already
+  normalized `budgetSubKey` before passing it down, so this is defence in depth —
+  and new tests pin the two validators together, so a future drift between them
+  fails the suite instead of silently turning scoped calls into `reason: 'error'`.
+- **A Redis failure can no longer leak the counter key into your logs.** With
+  `failOpen: false`, 0.1.0 re-threw the raw ioredis error, whose `command.args`
+  embed the full key — including the per-user/per-IP `budgetSubKey`. 0.2.0 wraps
+  it in a `BudgetCapError` and keeps the original as `cause`.
+- **A counter that overflows or holds a non-numeric value is now treated as an
+  error** (routed through `failOpen`) instead of being reported as a bogus
+  `allowed: true` with `degraded: false`.
+
+### Notes
+
+- **Still `checkAndIncrement`, deliberately.** `llm-budget-cap@0.2.0` adds
+  `reserve()`/`settle()` for costs that are only knowable **after** the paid call
+  (token counts). ChatArmor meters **one unit per LLM call** — an amount known up
+  front — and already charged the counter **before** `provider.generate()`, which
+  is the ordering that makes the cap a real ceiling. That is the documented
+  correct use of `checkAndIncrement`, so the concurrency overspend `reserve`/
+  `settle` fixes never applied here. New tests assert the bound directly: 50
+  concurrent `reply()` calls against `limit: 5` reach the LLM exactly 5 times.
+- `llm-budget-cap@0.2.0`'s new `timeoutMs` and `onDegraded` options are not yet
+  exposed through `ChatArmorBudgetOptions`; the 5000 ms timeout default applies
+  regardless. Surfacing them is additive API and belongs in a minor.
+
 ## [0.2.1] — 2026-08-06
 
 Docs-only patch. No code, `dist/`, or behavior changes from 0.2.0.

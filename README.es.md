@@ -92,7 +92,10 @@ import Redis from 'ioredis';
       apiKey: process.env.GEMINI_API_KEY, // solo del lado servidor
       // El tope de gasto — el corazón del asunto. Trae tu cliente de Redis.
       budget: {
-        redis: new Redis(process.env.REDIS_URL!),
+        redis: new Redis(process.env.REDIS_URL!, {
+          enableOfflineQueue: false, // un Redis caído falla en vez de encolar
+          maxRetriesPerRequest: 2, // no cuelgues el request reintentando
+        }),
         key: 'chatarmor:landing',
         limit: 500, // máx 500 llamadas al LLM / 24h entre todos los visitantes
       },
