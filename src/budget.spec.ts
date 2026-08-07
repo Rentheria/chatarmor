@@ -6,6 +6,9 @@ import type { ChatArmorBudgetOptions, LlmProvider } from './chat-armor.types';
 
 const FALLBACK = 'fallback reply';
 
+/** ChatArmor meters one unit per LLM call — the `amount` the Lua script gets. */
+const ONE_LLM_CALL = 1;
+
 /** Provider that always answers, and records whether it was reached. */
 class ReachProbe implements LlmProvider {
   readonly name = 'fake';
@@ -96,12 +99,13 @@ describe('ChatArmorService spend cap integration', () => {
 
     await service.reply('hi', { budgetSubKey: 'user-42' });
 
-    // Lua script gets KEYS[1] = `${key}:${subKey}`.
+    // Lua script gets KEYS[1] = `${key}:${subKey}`, ARGV = [windowMs, amount].
     expect(redis.eval).toHaveBeenCalledWith(
       expect.any(String),
       1,
       'chatarmor:test:user-42',
       expect.any(Number),
+      ONE_LLM_CALL,
     );
   });
 
@@ -118,6 +122,7 @@ describe('ChatArmorService spend cap integration', () => {
       1,
       'chatarmor:test',
       expect.any(Number),
+      ONE_LLM_CALL,
     );
   });
 
@@ -132,6 +137,7 @@ describe('ChatArmorService spend cap integration', () => {
       1,
       'chatarmor:test',
       expect.any(Number),
+      ONE_LLM_CALL,
     );
   });
 
@@ -155,5 +161,182 @@ describe('ChatArmorService spend cap integration', () => {
     expect(res.reason).toBe('error');
     expect(res.reply).toBe(FALLBACK);
     expect(provider.called).toBe(false);
+  });
+
+  it('reports degraded on a SUCCESSFUL reply when the cap ran unmetered', async () => {
+    const redis = fakeRedis(new Error('redis down'));
+    const { service, provider } = makeService(redis); // failOpen defaults to true
+
+    const res = await service.reply('hi');
+
+    // The assistant answered, but nothing was counted: the operator has to be
+    // able to see that spending is currently uncapped.
+    expect(res).toEqual({
+      reply: 'the real answer',
+      ok: true,
+      reason: 'ok',
+      degraded: true,
+    });
+    expect(provider.called).toBe(true);
+  });
+
+  it('omits degraded entirely when the cap really metered the call', async () => {
+    const redis = fakeRedis(1);
+    const { service } = makeService(redis);
+
+    const res = await service.reply('hi');
+
+    expect(res.degraded).toBeUndefined();
+  });
+});
+
+/**
+ * The cap has to hold when many requests land at once — the failure mode that
+ * motivated llm-budget-cap 0.2.0, where the counter was only charged AFTER the
+ * paid call and concurrent traffic blew ~20x past the limit.
+ *
+ * ChatArmor charges the counter BEFORE `provider.generate()`, so the bound is on
+ * calls that actually reach the LLM, not on calls that merely finished.
+ */
+describe('ChatArmorService spend cap under concurrency', () => {
+  /**
+   * Redis double that really counts: it applies the same `INCRBY` semantics the
+   * Lua script does and yields to the microtask queue first, so concurrent
+   * callers genuinely interleave instead of running to completion one by one.
+   */
+  class CountingRedis implements RedisEvalClient {
+    private readonly counters = new Map<string, number>();
+
+    async eval(
+      _script: string,
+      _numKeys: number,
+      ...args: (string | number)[]
+    ): Promise<number> {
+      const [key, , amount] = args as [string, number, number];
+      await Promise.resolve(); // let every concurrent caller reach this point
+      const next = (this.counters.get(key) ?? 0) + Number(amount);
+      this.counters.set(key, next);
+      return next;
+    }
+  }
+
+  /** Provider that counts how many times the paid LLM call was actually made. */
+  class PaidCallCounter implements LlmProvider {
+    readonly name = 'fake';
+    paidCalls = 0;
+    isConfigured(): boolean {
+      return true;
+    }
+    async generate(): Promise<string> {
+      this.paidCalls += 1;
+      await Promise.resolve();
+      return 'the real answer';
+    }
+  }
+
+  const LIMIT = 5;
+  const CONCURRENT_REQUESTS = 50;
+
+  it('never lets more than `limit` calls reach the LLM, however many arrive at once', async () => {
+    const provider = new PaidCallCounter();
+    const service = new ChatArmorService(
+      provider,
+      resolveConfig({ fallbackReply: FALLBACK }),
+      buildBudgetCap({
+        redis: new CountingRedis(),
+        key: 'chatarmor:test',
+        limit: LIMIT,
+      }),
+    );
+
+    const results = await Promise.all(
+      Array.from({ length: CONCURRENT_REQUESTS }, () => service.reply('hi')),
+    );
+
+    expect(provider.paidCalls).toBe(LIMIT);
+    expect(results.filter((res) => res.ok)).toHaveLength(LIMIT);
+    expect(
+      results.filter((res) => res.reason === 'budget-exceeded'),
+    ).toHaveLength(CONCURRENT_REQUESTS - LIMIT);
+  });
+
+  it('caps each budgetSubKey independently without leaking budget between them', async () => {
+    const provider = new PaidCallCounter();
+    const service = new ChatArmorService(
+      provider,
+      resolveConfig({ fallbackReply: FALLBACK }),
+      buildBudgetCap({
+        redis: new CountingRedis(),
+        key: 'chatarmor:test',
+        limit: LIMIT,
+      }),
+    );
+    const tenants = ['tenant-a', 'tenant-b'];
+
+    const results = await Promise.all(
+      tenants.flatMap((budgetSubKey) =>
+        Array.from({ length: CONCURRENT_REQUESTS }, () =>
+          service.reply('hi', { budgetSubKey }),
+        ),
+      ),
+    );
+
+    // Each tenant gets its own ceiling: one abuser cannot drain the other.
+    expect(provider.paidCalls).toBe(LIMIT * tenants.length);
+    expect(results.filter((res) => res.ok)).toHaveLength(
+      LIMIT * tenants.length,
+    );
+  });
+});
+
+/**
+ * llm-budget-cap 0.2.0 THROWS on a subKey it considers malformed, where 0.1.0
+ * accepted anything. ChatArmor normalizes first, so the two validators must stay
+ * compatible — if they ever drift, a legitimate subKey would turn into a thrown
+ * BudgetCapError and silently degrade every scoped call to `reason: 'error'`.
+ */
+describe('budgetSubKey normalization vs llm-budget-cap validation', () => {
+  const acceptedSubKeys = [
+    'user-42',
+    'tenant_9',
+    'a.b.c',
+    'UPPER-and-lower-123',
+    'a'.repeat(128), // exactly at the shared 128-char ceiling
+  ];
+
+  it.each(acceptedSubKeys)(
+    'meters "%s" against its own scoped bucket instead of erroring',
+    async (subKey) => {
+      const redis = fakeRedis(1);
+      const { service } = makeService(redis);
+
+      const res = await service.reply('hi', { budgetSubKey: subKey });
+
+      expect(res.reason).toBe('ok');
+      expect(redis.eval).toHaveBeenCalledWith(
+        expect.any(String),
+        1,
+        `chatarmor:test:${subKey}`,
+        expect.any(Number),
+        ONE_LLM_CALL,
+      );
+    },
+  );
+
+  it('never forwards an empty subKey, which 0.2.0 rejects outright', async () => {
+    const redis = fakeRedis(1);
+    const { service } = makeService(redis);
+
+    const res = await service.reply('hi', { budgetSubKey: '' });
+
+    // Normalized away to the global bucket — NOT passed through as `''`.
+    expect(res.reason).toBe('ok');
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'chatarmor:test',
+      expect.any(Number),
+      ONE_LLM_CALL,
+    );
   });
 });
