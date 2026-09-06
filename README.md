@@ -1,5 +1,9 @@
 # chatarmor
 
+[![npm version](https://img.shields.io/npm/v/chatarmor)](https://www.npmjs.com/package/chatarmor)
+[![CI](https://img.shields.io/github/actions/workflow/status/Rentheria/chatarmor/ci.yml?branch=main&label=CI)](https://github.com/Rentheria/chatarmor/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/chatarmor)](https://github.com/Rentheria/chatarmor/blob/main/LICENSE)
+
 **A production-ready AI chat endpoint for NestJS — with the protections indie devs forget.**
 You wire an assistant onto Gemini/OpenAI, it works in testing, and then reality
 hits: the API key leaks to the frontend, one slow upstream call hangs your whole
