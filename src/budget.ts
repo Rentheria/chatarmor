@@ -24,5 +24,7 @@ export function buildBudgetCap(
     limit: options.limit,
     windowMs: options.windowMs,
     failOpen: options.failOpen ?? true,
+    timeoutMs: options.timeoutMs,
+    onDegraded: options.onDegraded,
   });
 }
