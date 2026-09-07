@@ -34,6 +34,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Test with coverage
+        run: npm run test:cov
+
       - name: Build
         run: npm run build
 
