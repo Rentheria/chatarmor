@@ -47,6 +47,19 @@ export interface ChatArmorBudgetOptions {
    * throwing. Defaults to `true` — a briefly unmetered feature beats an outage.
    */
   readonly failOpen?: boolean;
+  /**
+   * Hard timeout in milliseconds for each Redis operation. If Redis does not
+   * answer within this budget, the call is decided by `failOpen` instead of
+   * hanging. Defaults to 5000. Set to 0 to disable (not recommended).
+   */
+  readonly timeoutMs?: number;
+  /**
+   * Optional callback invoked with the underlying error whenever a call
+   * degrades to a fail-open result. Use it to alert/meter outages without
+   * wrapping every call. Its own throws are swallowed so a broken hook can
+   * never break the request path. Only meaningful with `failOpen: true`.
+   */
+  readonly onDegraded?: (error: unknown) => void;
 }
 
 /** Root options for {@link ChatArmorModule.forRoot}. */

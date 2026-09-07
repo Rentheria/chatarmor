@@ -71,17 +71,19 @@ delgado, aburrido y correcto entre tu endpoint y el LLM.
 ## Instalación
 
 ```bash
-npm install chatarmor llm-budget-cap ioredis
+npm install chatarmor ioredis
 ```
 
 - `chatarmor` — este paquete. Peer: `@nestjs/common` (v10 o v11).
-- `llm-budget-cap` — el tope de gasto (dependencia real, se instala solo).
 - `ioredis` — tú traes tu cliente de Redis para el tope de gasto (peer opcional;
   omítelo solo si corres sin tope, lo cual no recomendamos).
+- `llm-budget-cap` — el tope de gasto (dependencia transitiva, se instala automáticamente).
 
 ---
 
 ## Uso mínimo (Gemini)
+
+Un ejemplo funcional: [examples/nestjs-minimal/](./examples/nestjs-minimal/) — pruébalo en 60 segundos.
 
 ```ts
 // app.module.ts
@@ -102,6 +104,7 @@ import Redis from 'ioredis';
         }),
         key: 'chatarmor:landing',
         limit: 500, // máx 500 llamadas al LLM / 24h entre todos los visitantes
+        failOpen: false, // recomendado para seguridad: falla cerrado en caída de Redis
       },
     }),
   ],
@@ -274,20 +277,20 @@ agotado").
 
 ## Opciones
 
-| Opción             | Default       | Qué hace                                                                                          |
-| ------------------ | ------------- | ------------------------------------------------------------------------------------------------- |
-| `provider`         | `'gemini'`    | `'gemini'` u `'openai'`.                                                                          |
-| `apiKey`           | —             | Llave del proveedor, **solo del lado servidor**. Ausente → siempre fallback (seguro por defecto). |
-| `model`            | por proveedor | p. ej. `gemini-2.5-flash`, `gpt-4o-mini`.                                                         |
-| `timeoutMs`        | `15000`       | Aborta la llamada upstream tras esto.                                                             |
-| `temperature`      | `0.3`         | Baja, para que el modelo se apegue a los hechos.                                                  |
-| `maxOutputTokens`  | `512`         | Acota el largo de la respuesta + costo.                                                           |
-| `maxMessageLength` | `1000`        | Trunca el mensaje del usuario antes de llegar al LLM.                                             |
-| `guardrail`        | `true`        | `true` = guardrail anti-inyección integrado; string = el tuyo; `false` = apagado.                 |
-| `fallbackReply`    | genérico      | El texto devuelto ante cualquier falla/límite.                                                    |
-| `budget`           | —             | `{ redis, key, limit, windowMs?, failOpen? }`. Omítelo para correr sin tope (no recomendado).     |
-| `customProvider`   | —             | Tu propio `LlmProvider`.                                                                          |
-| `global`           | `true`        | Registra proveedor/opciones global para que `forFeature` los resuelva.                            |
+| Opción             | Default       | Qué hace                                                                                                        |
+| ------------------ | ------------- | --------------------------------------------------------------------------------------------------------------- |
+| `provider`         | `'gemini'`    | `'gemini'` u `'openai'`.                                                                                        |
+| `apiKey`           | —             | Llave del proveedor, **solo del lado servidor**. Ausente → siempre fallback (seguro por defecto).               |
+| `model`            | por proveedor | p. ej. `gemini-2.5-flash`, `gpt-4o-mini`.                                                                       |
+| `timeoutMs`        | `15000`       | Aborta la llamada upstream tras esto.                                                                           |
+| `temperature`      | `0.3`         | Baja, para que el modelo se apegue a los hechos.                                                                |
+| `maxOutputTokens`  | `512`         | Acota el largo de la respuesta + costo.                                                                         |
+| `maxMessageLength` | `1000`        | Trunca el mensaje del usuario antes de llegar al LLM.                                                           |
+| `guardrail`        | `true`        | `true` = guardrail anti-inyección integrado; string = el tuyo; `false` = apagado.                               |
+| `fallbackReply`    | genérico      | El texto devuelto ante cualquier falla/límite.                                                                  |
+| `budget`           | —             | `{ redis, key, limit, windowMs?, failOpen?, timeoutMs?, onDegraded? }`. **Omitir = sin tope** (no recomendado). |
+| `customProvider`   | —             | Tu propio `LlmProvider`.                                                                                        |
+| `global`           | `true`        | Registra proveedor/opciones global para que `forFeature` los resuelva.                                          |
 
 ---
 
@@ -338,10 +341,12 @@ servidor, así que un llamador no puede rotarlo para escapar del tope.
 ## Seguro por defecto
 
 Sin `apiKey`, cada llamada devuelve el fallback y nunca toca el LLM. Publica el
-endpoint apagado, cablea el frontend, y pon la llave cuando estés listo. El tope
-de gasto falla **abierto** por defecto (una caída breve de Redis degrada el tope
-en vez de tumbar el asistente); pon `budget.failOpen: false` para fallar cerrado
-— **recomendado para despliegues security-first**.
+endpoint apagado, cablea el frontend, y pon la llave cuando estés listo.
+
+El tope de gasto falla **abierto** por defecto (`budget.failOpen: true` — una
+caída breve de Redis degrada el tope en vez de tumbar el asistente). Para
+**despliegues security-first**, pon `budget.failOpen: false` para fallar cerrado:
+una caída de Redis devolverá el fallback en vez de dejar pasar llamadas sin medir.
 
 ## Migrar desde 0.1.0
 

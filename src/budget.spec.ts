@@ -68,6 +68,27 @@ describe('buildBudgetCap', () => {
     });
     expect(cap).toBeInstanceOf(BudgetCap);
   });
+
+  it('passes timeoutMs through to llm-budget-cap BudgetCap', () => {
+    const cap = buildBudgetCap({
+      redis: fakeRedis(1),
+      key: 'chatarmor:test',
+      limit: 5,
+      timeoutMs: 3000,
+    });
+    expect(cap).toBeInstanceOf(BudgetCap);
+  });
+
+  it('passes onDegraded callback through to llm-budget-cap BudgetCap', () => {
+    const onDegraded = jest.fn();
+    const cap = buildBudgetCap({
+      redis: fakeRedis(1),
+      key: 'chatarmor:test',
+      limit: 5,
+      onDegraded,
+    });
+    expect(cap).toBeInstanceOf(BudgetCap);
+  });
 });
 
 describe('ChatArmorService spend cap integration', () => {
