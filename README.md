@@ -367,6 +367,10 @@ the deprecated shapes are removed in **1.0.0** (full list in
   still reading `body.sessionId` keeps working. Never wire either into
   `budgetSubKey` — a client can rotate it per request, so it cannot gate spending.
 
+## See also
+
+- [agent-context-atlas](https://github.com/Rentheria/agent-context-atlas) — context wiki/RAG for agents; complementary to chatarmor (safe chat endpoint vs context corpus).
+
 ## License
 
 MIT © Alejandro Rentheria ([Rentheria](https://github.com/Rentheria)). Sibling
