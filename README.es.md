@@ -374,6 +374,10 @@ quieras — las formas deprecadas se eliminan en **1.0.0** (lista completa en
   endpoint que siga leyendo `body.sessionId` no se rompe. Nunca cablees ninguno a
   `budgetSubKey`: el cliente puede rotarlo por request, así que no puede topar gasto.
 
+## Véase también
+
+- [agent-context-atlas](https://github.com/Rentheria/agent-context-atlas) — wiki/RAG de contexto para agentes; complementario a chatarmor (endpoint de chat seguro vs corpus de contexto).
+
 ## Licencia
 
 MIT © Alejandro Rentheria ([Rentheria](https://github.com/Rentheria)). Paquete
